@@ -181,23 +181,6 @@ impl Game{
         self.ball.1 += self.ball_v.1;
     }
 
-    fn find_ball_style(&mut self) -> &str{
-        let ball_text_styles = vec!("█", "▐▌", "▄\n▀", "▗▖\n▝▘",);
-
-        let denormalized_x = self.ball.0 * 100.0;
-        let mut x_coord = 0;
-
-        if denormalized_x - denormalized_x.floor() > 0.33 && denormalized_x - denormalized_x.floor() < 0.66{
-            x_coord = 0;
-        }else if denormalized_x - denormalized_x.floor() > 0.66{
-            x_coord = 1;
-        }else{
-            x_coord = -1;
-        }
-
-        let denormalized_y = self.ball.1 * 100.0;
-        let mut y_coord = 0;
-        
 }
 
 impl Default for Game {
@@ -216,10 +199,40 @@ impl Default for Game {
 impl Widget for &Game {
     fn render(self, area: Rect, buf: &mut Buffer) {
 
-        let ball_text = "██";
-        //draw ball
-        buf.set_string(area.x + (self.ball.0 * area.width as f32) as u16, area.y + (self.ball.1 * area.height as f32) as u16, ball_text, Style::default());
+        let ball_text_styles: Vec<Vec<(&str, &str)>> = vec!(
+            vec!(("▄", "▀"), ("▗▖", "▝▘"), ("▄", "▀")),
+            vec!(("▐▌", ""), ("█", ""), ("▐▌", "")),
+            vec!(("▄", "▀"), ("▗▖", "▝▘"), ("▄", "▀"),
+        );
+            
+        let denormalized_x = self.ball.0 * 100.0;
+        let mut x_coord = 0;
+
+        if denormalized_x - denormalized_x.floor() > 0.33 && denormalized_x - denormalized_x.floor() < 0.66{
+            x_coord = 1;
+        }else if denormalized_x - denormalized_x.floor() > 0.66{
+            x_coord = 2;
+        }else{
+            x_coord = 0;
+        }
+
+
+        let denormalized_y = self.ball.1 * Frame::Height as f32;
+        let mut y_coord = 0;
+
+        if denormalized_y - denormalized_y.floor() > 0.33 && denormalized_y - denormalized_y.floor() < 0.66{
+            y_coord = 1;
+        }else if denormalized_y - denormalized_y.floor() > 0.66{
+            y_coord = 2;
+        }else{
+            y_coord = 0;
+        }
+
+        let ball_text = ball_text_styles[y_coord][x_coord];
+        buf.set_string(area.x + (self.ball.0 * area.width as f32) as u16 + (x_coord - 1) , area.y + (self.ball.1 * area.height as f32) as u16 - (y_coord - 1) , ball_text, Style::default());
     }
+
+
 }
 
 
