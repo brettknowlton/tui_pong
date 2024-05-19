@@ -4,22 +4,54 @@ use ratatui::{
     symbols::border,
     widgets::{block::*, *},
 };
-use std::io;
+use std::{io, time::Duration, vec};
 
 mod tui;
+#[derive(Debug, Default)]
+pub enum State{
+    #[default]
+    Menu,
+    Game,
+    GameOver,
+}
 
 #[derive(Debug, Default)]
 pub struct App {
     counter: u8,
     exit: bool,
+    state: State,
+    game: Game,
 }
+
 
 impl App {
     //runs the application's main loop until quit
     pub fn run(&mut self, terminal: &mut tui::Tui) -> io::Result<()> {
+
+        self.state = State::Game;
+        self.game = Game::default();
+
         while !self.exit{
-            terminal.draw(|frame| self.render_frame(frame))?;
+            self.update()?;
+            
             self.handle_events()?;
+             
+            terminal.draw(|frame| self.render_frame(frame))?;
+        }
+        Ok(())
+    }
+
+    fn update(&mut self) -> io::Result<()> {
+        match(self.state){
+            State::Menu => {
+                //self.update_menu()?;
+            }
+            State::Game => {
+                self.game.update();
+            }
+            State::GameOver => {
+                //self.update_game_over()?;
+            }
         }
         Ok(())
     }
@@ -29,14 +61,19 @@ impl App {
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            // it's important to check that the event is a key press event as
-            // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
-            }
-            _ => {}
-        };
+
+        if event::poll(Duration::from_millis(32))? {
+            // It's guaranteed that `read` won't block, because `poll` returned
+            // `Ok(true)`.
+            match event::read()? {
+                // it's important to check that the event is a key press event as
+                // crossterm also emits key release and repeat events on Windows.
+                Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                    self.handle_key_event(key_event)
+                }
+                _ => {}
+            };
+        }
         Ok(())
     }
 
@@ -64,6 +101,11 @@ impl App {
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(90), Constraint::Min(10)].as_ref())
+            .split(area);
+
         let title = Title::from(" Counter App Tutorial ".bold());
         let instructions = Title::from(Line::from(vec![
             " Decrement ".into(),
@@ -81,7 +123,8 @@ impl Widget for &App {
                     .position(Position::Bottom),
             )
             .borders(Borders::ALL)
-            .border_set(border::THICK);
+            .border_set(border::THICK)
+            .red();
 
         let counter_text = Text::from(vec![Line::from(vec![
             "Value: ".into(),
@@ -91,9 +134,95 @@ impl Widget for &App {
         Paragraph::new(counter_text)
             .centered()
             .block(block)
-            .render(area, buf);
+            .render(layout[1], buf);
+
+        match self.state {
+            State::Menu => {
+                //self.render_menu(layout[0], buf);
+            }
+            State::Game => {
+                self.game.render(layout[0], buf);
+            }
+            State::GameOver => {
+                //self.render_game_over(layout[0], buf);
+            }
+        }
+
+        
     }
 }
+
+#[derive(Debug)]
+struct Game{
+    //ball position + velocity
+    ball: (f32, f32),
+    ball_v: (f32, f32),
+
+    //player 1 position + velocity
+    p1: (f32, f32),
+    p1_v: f32,
+
+    //player 2 position + velocity
+    p2: (f32, f32),
+    p2_v: f32,
+}
+
+impl Game{
+    fn update(&mut self) {
+
+        if(self.ball.0 + self.ball_v.0) > 1.0 || (self.ball.0 + self.ball_v.0) < 0.0 {
+            self.ball_v.0 = -self.ball_v.0;
+        }
+        self.ball.0 += self.ball_v.0;
+
+        if(self.ball.1 + self.ball_v.1) > 1.0 || (self.ball.1 + self.ball_v.1) < 0.0 {
+            self.ball_v.1 = -self.ball_v.1;
+        }
+        self.ball.1 += self.ball_v.1;
+    }
+
+    fn find_ball_style(&mut self) -> &str{
+        let ball_text_styles = vec!("█", "▐▌", "▄\n▀", "▗▖\n▝▘",);
+
+        let denormalized_x = self.ball.0 * 100.0;
+        let mut x_coord = 0;
+
+        if denormalized_x - denormalized_x.floor() > 0.33 && denormalized_x - denormalized_x.floor() < 0.66{
+            x_coord = 0;
+        }else if denormalized_x - denormalized_x.floor() > 0.66{
+            x_coord = 1;
+        }else{
+            x_coord = -1;
+        }
+
+        let denormalized_y = self.ball.1 * 100.0;
+        let mut y_coord = 0;
+        
+}
+
+impl Default for Game {
+    fn default() -> Self {
+        Self {
+            ball: (0.0, 0.0),
+            ball_v: (0.015, 0.024),
+            p1: (0.0, 0.0),
+            p1_v: 0.0,
+            p2: (0.0, 0.0),
+            p2_v: 0.0,
+        }
+    }
+}
+
+impl Widget for &Game {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+
+        let ball_text = "██";
+        //draw ball
+        buf.set_string(area.x + (self.ball.0 * area.width as f32) as u16, area.y + (self.ball.1 * area.height as f32) as u16, ball_text, Style::default());
+    }
+}
+
+
 
 
 fn main() -> io::Result<()> {
