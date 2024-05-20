@@ -5,7 +5,7 @@ use ratatui::{
     symbols::border,
     widgets::{block::*, *},
 };
-use std::{cmp::{max, min}, io, time::Duration, vec};
+use std::{cmp::{max, min}, io, ops::Range, time::Duration, vec};
 
 mod tui;
 mod game_input;
@@ -47,7 +47,7 @@ impl App {
     }
 
     fn update(&mut self) -> io::Result<()> {
-        match(self.state){
+        match self.state{
             State::Menu => {
                 //self.update_menu()?;
             }
@@ -206,7 +206,7 @@ impl Game{
         match input.p1_paddle_state {
             PaddleState::MovingUp => {
                 self.p1_pos.1 += 0.22;
-                self.p1_pos.1.clamp(0.0, 1.0);
+                self.p1_pos.1 = self.p1_pos.1.clamp(0.0, 1.0);
             },
             PaddleState::MovingDown => {
                 self.p1_pos.1 -= 0.22;
@@ -272,18 +272,39 @@ impl Game{
         buf.set_string(line2_x as u16, line2_y, line2, Color::Yellow);
     }
 
-    // fn draw_paddles(&self, area: Rect, buf: &mut Buffer){
-    //     let paddle_top = "┓";
-    //     let paddle_mid = "┃";
-    //     let paddle_bot = "┛";
+    fn draw_paddles(&self, area: Rect, buf: &mut Buffer){
+        let paddle_top = "┓";
+        let paddle_mid = "┃";
+        let paddle_bot = "┛";
 
-    //     let mut x: i16;
-    //     let p1y_normalized = self.p1_pos.1 * area.height as f32;
+        let mut x: i16;
+        let p1y_denormalized = (self.p1_pos.1 * area.height as f32) as i16;
+
+        for i in (Range{start: 0, end: 3}){
+
+            let paddle_text;
+
+            if i == 0 {
+                paddle_text = paddle_top;
+            }else if i==3{
+                paddle_text = paddle_bot;
+            }else{
+                paddle_text = paddle_mid;
+            }
 
 
-    //     buf.set_string(line_x as u16, line_y, paddle_text, Color::Yellow);
+            let line_x = 1;
+            let mut line_y = i - 2 + p1y_denormalized;
 
-    // }
+            line_y = line_y.clamp(0, area.width as i16);
+            
+
+            buf.set_string(line_x as u16, line_y as u16, paddle_text, Color::Yellow);
+        }
+
+        
+
+    }
 }
 
 
@@ -311,7 +332,7 @@ impl Widget for &Game {
             .render(area, buf);
 
         Game::draw_ball(self, area, buf);
-
+        Game::draw_paddles(self, area, buf);
         
     }
 
