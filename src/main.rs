@@ -1,4 +1,5 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use game_input::{GameInputState, PaddleState};
 use ratatui::{
     prelude::*,
     symbols::border,
@@ -7,6 +8,8 @@ use ratatui::{
 use std::{cmp::{max, min}, io, time::Duration, vec};
 
 mod tui;
+mod game_input;
+
 #[derive(Debug, Default)]
 pub enum State{
     #[default]
@@ -21,6 +24,7 @@ pub struct App {
     exit: bool,
     state: State,
     game: Game,
+    input_state: game_input::GameInputState,
 }
 
 
@@ -30,6 +34,7 @@ impl App {
 
         self.state = State::Game;
         self.game = Game::default();
+        self.input_state = game_input::GameInputState::default();
 
         while !self.exit{
             self.update()?;
@@ -47,7 +52,7 @@ impl App {
                 //self.update_menu()?;
             }
             State::Game => {
-                self.game.update();
+                self.game.update(self.input_state);
             }
             State::GameOver => {
                 //self.update_game_over()?;
@@ -68,7 +73,7 @@ impl App {
             match event::read()? {
                 // it's important to check that the event is a key press event as
                 // crossterm also emits key release and repeat events on Windows.
-                Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                Event::Key(key_event) if (key_event.kind == KeyEventKind::Press) || (key_event.kind == KeyEventKind::Release) => {
                     self.handle_key_event(key_event)
                 }
                 _ => {}
@@ -78,13 +83,28 @@ impl App {
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            KeyCode::Left => self.decrement_counter(),
-            KeyCode::Right => self.increment_counter(),
+        match key_event.kind{
+            KeyEventKind::Press =>{
+                match key_event.code {
+                    KeyCode::Char('q') => self.exit(),
+                    KeyCode::Left => self.decrement_counter(),
+                    KeyCode::Right => self.increment_counter(),
+        
+                    // KeyCode::W => self.
+                    _ => {}
+                }
+            },
+            KeyEventKind::Release=>{
+                match key_event.code{
+                    _ => {}
+                }
+            },
             _ => {}
         }
+        
     }
+
+
 
     fn exit(&mut self) {
         self.exit = true;
@@ -152,17 +172,50 @@ struct Game{
     ball_v: (f32, f32),
 
     //player 1 position + velocity
-    p1: (f32, f32),
+    p1_pos: (f32, f32),
     p1_v: f32,
 
     //player 2 position + velocity
-    p2: (f32, f32),
+    p2_pos: (f32, f32),
     p2_v: f32,
+}
+impl Default for Game {
+    fn default() -> Self {
+        Self {
+            score: (0, 0),
+
+            ball: (0.0, 0.0),//the "top-left" of the ball
+            ball_v: (0.055, 0.0275),
+
+            p1_pos: (0.0, 0.5),//the "top-left" of player 1's (left) paddle (normalized)
+            p1_v: 0.0,
+
+            p2_pos: (0.0, 0.5),//the "center" of player 2's (left) paddle (normalized)
+            p2_v: 0.0,
+        }
+    }
 }
 
 impl Game{
-    fn update(&mut self) {
+    fn update(&mut self, input: GameInputState) {
+        self.collide_ball_with_border();
+        self.update_player_paddles(input);
+    }
 
+    fn update_player_paddles(&mut self, input: GameInputState){
+        match input.p1_paddle_state {
+            PaddleState::MovingUp => {
+                self.p1_pos.1 += 0.22;
+                self.p1_pos.1.clamp(0.0, 1.0);
+            },
+            PaddleState::MovingDown => {
+                self.p1_pos.1 -= 0.22;
+            }
+            _ => {}
+        }
+    }
+
+    fn collide_ball_with_border(&mut self){
         if(self.ball.0 + self.ball_v.0) >= 1.0 || (self.ball.0 + self.ball_v.0) < 0.0 {
             self.ball_v.0 = -self.ball_v.0;
         }
@@ -182,7 +235,7 @@ impl Game{
         );
             
         let denormalized_x = self.ball.0 * area.width as f32;
-        let mut x_coord: i16;
+        let x_coord: i16;
 
         if denormalized_x - denormalized_x.floor() > 0.33 && denormalized_x - denormalized_x.floor() < 0.66{
             x_coord = 0;
@@ -210,42 +263,34 @@ impl Game{
 
         let line1 = ball_text.0;
         let line1_x = max((self.ball.0 * area.width as f32) as i16 + (x_coord - 1) as i16 - 2, 0);
-        let line1_y = (self.ball.1 * area.height as f32) as u16 + max(y_coord - 1 , 0) as u16;
+        let line1_y = ((self.ball.1 * area.height as f32) as i16 + y_coord - 1).clamp(1, area.height as i16 - 2) as u16;
         buf.set_string(line1_x as u16, line1_y, line1, Color::Yellow);
 
         let line2 = ball_text.1;
-        let line2_x = (self.ball.0 * area.width as f32) as u16 + max(x_coord - 1 , 0) as u16 - 2;
-        let line2_y = min(
-            (self.ball.1 * area.height as f32) as u16 + 
-                max(
-                    y_coord - 1 , 
-                    0
-                ) as u16 + 1, 
-            area.height - 1 
-        ) as u16;
-        buf.set_string(line2_x, line2_y, line2, Color::Yellow);
+        let line2_x = max((self.ball.0 * area.width as f32) as i16 + (x_coord - 1) as i16 - 2, 0);
+        let line2_y = ((self.ball.1 * area.height as f32) as i16 + y_coord).clamp(1, area.height as i16 - 2) as u16;
+        buf.set_string(line2_x as u16, line2_y, line2, Color::Yellow);
     }
 
+    // fn draw_paddles(&self, area: Rect, buf: &mut Buffer){
+    //     let paddle_top = "┓";
+    //     let paddle_mid = "┃";
+    //     let paddle_bot = "┛";
+
+    //     let mut x: i16;
+    //     let p1y_normalized = self.p1_pos.1 * area.height as f32;
+
+
+    //     buf.set_string(line_x as u16, line_y, paddle_text, Color::Yellow);
+
+    // }
 }
 
-impl Default for Game {
-    fn default() -> Self {
-        Self {
-            score: (0, 0),
-            ball: (0.0, 0.0),
-            ball_v: (0.055, 0.0275),
-            p1: (0.0, 0.0),
-            p1_v: 0.0,
-            p2: (0.0, 0.0),
-            p2_v: 0.0,
-        }
-    }
-}
+
 
 impl Widget for &Game {
     fn render(self, area: Rect, buf: &mut Buffer) {
         //draw ball
-        
 
         let title = Title::from(format!("({}) - ({})", self.score.0, self.score.1).bold());
         let description = Title::from(Line::from(vec![
@@ -266,6 +311,7 @@ impl Widget for &Game {
             .render(area, buf);
 
         Game::draw_ball(self, area, buf);
+
         
     }
 
