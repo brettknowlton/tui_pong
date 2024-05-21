@@ -67,7 +67,7 @@ impl App {
 
     fn handle_events(&mut self) -> io::Result<()> {
 
-        if event::poll(Duration::from_millis(82))? {
+        if event::poll(Duration::from_millis(10))? {
             // It's guaranteed that `read` won't block, because `poll` returned
             // `Ok(true)`.
             match event::read()? {
@@ -234,7 +234,7 @@ impl Game{
             vec!(("▗▄", "▝▀"), ("▗▄▖", "▝▀▘"), ("▄▖", "▀▘")),
         );
             
-        let denormalized_x = self.ball.0 * area.width as f32;
+        let denormalized_x = 1.0 + self.ball.0 * (area.width - 2) as f32;
         let x_coord: i16;
 
         if denormalized_x - denormalized_x.floor() > 0.33 && denormalized_x - denormalized_x.floor() < 0.66{
@@ -246,7 +246,7 @@ impl Game{
         }
 
 
-        let denormalized_y = self.ball.1 * area.height as f32;
+        let denormalized_y = 1.0 + self.ball.1 * (area.height - 2) as f32;
         let mut y_coord: i16;
 
         if denormalized_y - denormalized_y.floor() > 0.33 && denormalized_y - denormalized_y.floor() < 0.66{
@@ -261,15 +261,21 @@ impl Game{
 
         y_coord = min(y_coord, 1);
 
+
+        //IF DENORMALIZED X PLACES US ALL THE WAY ON THE LEFT OR ALL THE WAY ON THE RIGHT
+        //ONLY PRINT HALF THE BALL
+
         let line1 = ball_text.0;
         let line1_x = max((self.ball.0 * area.width as f32) as i16 + (x_coord - 1) as i16 - 2, 0);
-        let line1_y = ((self.ball.1 * area.height as f32) as i16 + y_coord - 1).clamp(1, area.height as i16 - 2) as u16;
+        let line1_y = ((self.ball.1 * area.height as f32) as i16 + y_coord - 1).clamp(1, area.height as i16 - 1) as u16;
         buf.set_string(line1_x as u16, line1_y, line1, Color::Yellow);
 
         let line2 = ball_text.1;
         let line2_x = max((self.ball.0 * area.width as f32) as i16 + (x_coord - 1) as i16 - 2, 0);
-        let line2_y = ((self.ball.1 * area.height as f32) as i16 + y_coord).clamp(1, area.height as i16 - 2) as u16;
-        buf.set_string(line2_x as u16, line2_y, line2, Color::Yellow);
+        let line2_y = ((self.ball.1 * area.height as f32) as i16 + y_coord).clamp(1, area.height as i16 - 1) as u16;
+        if line2_y < area.height - 1{
+            buf.set_string(line2_x as u16, line2_y, line2, Color::Yellow);
+        }
     }
 
     fn draw_paddles(&self, area: Rect, buf: &mut Buffer){
@@ -277,10 +283,9 @@ impl Game{
         let paddle_mid = "┃";
         let paddle_bot = "┛";
 
-        let mut x: i16;
         let p1y_denormalized = (self.p1_pos.1 * area.height as f32) as i16;
 
-        for i in (Range{start: 0, end: 3}){
+        for i in (Range{start: 0, end: 4}){
 
             let paddle_text;
 
@@ -301,9 +306,6 @@ impl Game{
 
             buf.set_string(line_x as u16, line_y as u16, paddle_text, Color::Yellow);
         }
-
-        
-
     }
 }
 
